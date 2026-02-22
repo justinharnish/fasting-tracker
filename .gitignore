@@ -1,0 +1,7 @@
+node_modules/
+.env
+data/
+logs/
+dashboard/fasting-log.json
+dashboard/data.js
+.DS_Store

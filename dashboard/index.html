@@ -1,0 +1,1529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f0f0f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Fasting Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 24px;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .header {
+      max-width: 900px;
+      margin: 0 auto 24px;
+    }
+
+    .header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 0.85rem;
+      color: #888;
+    }
+
+    /* ─── Stats Row ─── */
+    .stats {
+      display: flex;
+      gap: 16px;
+      max-width: 900px;
+      margin: 0 auto 24px;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      flex: 1;
+      min-width: 130px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+
+    .stat-card .label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .stat-card .value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .stat-card .value.green { color: #4ade80; }
+    .stat-card .value.yellow { color: #facc15; }
+    .stat-card .value.blue { color: #60a5fa; }
+
+    /* ─── Status Card ─── */
+    .status-card {
+      max-width: 900px;
+      margin: 0 auto 24px;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 20px 24px;
+      font-size: 1.05rem;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .status-card .indicator {
+      font-size: 1.5rem;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .status-card .indicator.active {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .status-card .text {
+      flex: 1;
+    }
+
+    .status-card .status-time {
+      color: #4ade80;
+      font-weight: 600;
+    }
+
+    .status-card.not-fasting .status-time {
+      color: #facc15;
+    }
+
+    /* ─── Action Bar ─── */
+    .action-bar {
+      max-width: 900px;
+      margin: 0 auto 24px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      flex: 1;
+      min-width: 130px;
+      min-height: 48px;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .action-btn:active {
+      transform: scale(0.97);
+    }
+
+    .action-btn.start {
+      background: #22c55e;
+      color: #000;
+    }
+
+    .action-btn.start:hover {
+      background: #16a34a;
+    }
+
+    .action-btn.start.suggested {
+      box-shadow: 0 0 0 2px #4ade80, 0 0 12px rgba(74, 222, 128, 0.3);
+    }
+
+    .action-btn.stop {
+      background: #f97316;
+      color: #000;
+    }
+
+    .action-btn.stop:hover {
+      background: #ea580c;
+    }
+
+    .action-btn.stop.suggested {
+      box-shadow: 0 0 0 2px #fb923c, 0 0 12px rgba(249, 115, 22, 0.3);
+    }
+
+    .action-btn.update {
+      background: transparent;
+      color: #ccc;
+      border: 1px solid #3a3a3a;
+      flex: 0.5;
+    }
+
+    .action-btn.update:hover {
+      background: #2a2a2a;
+      color: #fff;
+    }
+
+    /* ─── Time Picker Popup ─── */
+    .time-picker-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .time-picker-overlay.show {
+      display: flex;
+    }
+
+    .time-picker {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 24px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    }
+
+    .time-picker h3 {
+      color: #fff;
+      margin-bottom: 16px;
+      font-size: 1.1rem;
+    }
+
+    .time-picker .update-info {
+      color: #888;
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+    }
+
+    .time-preset-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .time-preset-btn {
+      padding: 12px 8px;
+      min-height: 48px;
+      background: #2a2a2a;
+      color: #ccc;
+      border: 1px solid #3a3a3a;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .time-preset-btn:hover {
+      background: #3a3a3a;
+      color: #fff;
+    }
+
+    .time-preset-btn.now-btn {
+      background: #4ade80;
+      color: #000;
+      font-weight: 600;
+      border-color: #4ade80;
+    }
+
+    .time-preset-btn.now-btn:hover {
+      background: #22c55e;
+    }
+
+    .time-custom-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .time-custom-row input {
+      flex: 1;
+      padding: 12px 16px;
+      min-height: 48px;
+      background: #0f0f0f;
+      color: #fff;
+      border: 1px solid #3a3a3a;
+      border-radius: 10px;
+      font-size: 1rem;
+    }
+
+    .time-custom-row input:focus {
+      outline: none;
+      border-color: #4ade80;
+    }
+
+    .time-custom-row button {
+      padding: 12px 20px;
+      min-height: 48px;
+      background: #4ade80;
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .time-picker-cancel {
+      display: block;
+      width: 100%;
+      margin-top: 12px;
+      padding: 12px;
+      min-height: 48px;
+      background: transparent;
+      color: #888;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    .time-picker-cancel:hover {
+      color: #ccc;
+      border-color: #3a3a3a;
+    }
+
+    /* ─── Chart Container ─── */
+    .chart-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .chart-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .chart-nav .date-range {
+      font-size: 0.9rem;
+      color: #aaa;
+    }
+
+    .chart-nav button {
+      background: #2a2a2a;
+      color: #ccc;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .chart-nav button:hover:not(:disabled) {
+      background: #3a3a3a;
+      color: #fff;
+    }
+
+    .chart-nav button:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    .nav-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    canvas {
+      max-height: 400px;
+      cursor: pointer;
+    }
+
+    .legend {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin-top: 16px;
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+
+    .no-data h2 {
+      margin-bottom: 8px;
+      color: #888;
+    }
+
+    /* ─── Edit Modal ─── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 32px;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    }
+
+    .modal h2 {
+      color: #fff;
+      margin-bottom: 24px;
+      font-size: 1.3rem;
+    }
+
+    .modal-field {
+      margin-bottom: 20px;
+    }
+
+    .modal-field label {
+      display: block;
+      color: #aaa;
+      font-size: 0.9rem;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .modal-field input[type="datetime-local"] {
+      width: 100%;
+      padding: 12px 16px;
+      background: #0f0f0f;
+      color: #fff;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    }
+
+    .modal-field input[type="datetime-local"]:focus {
+      outline: none;
+      border-color: #4ade80;
+      box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.1);
+    }
+
+    .modal-duration {
+      background: #0f0f0f;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      color: #aaa;
+      font-size: 0.95rem;
+    }
+
+    .modal-duration .value {
+      color: #4ade80;
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .modal-button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .modal-button.save {
+      background: #4ade80;
+      color: #000;
+      flex: 1;
+    }
+
+    .modal-button.save:hover {
+      background: #22c55e;
+    }
+
+    .modal-button.delete {
+      background: #f87171;
+      color: #fff;
+    }
+
+    .modal-button.delete:hover {
+      background: #ef4444;
+    }
+
+    .modal-button.cancel {
+      background: #2a2a2a;
+      color: #ccc;
+    }
+
+    .modal-button.cancel:hover {
+      background: #3a3a3a;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+      right: 20px;
+      background: #4ade80;
+      color: #000;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      z-index: 2000;
+      animation: slideIn 0.3s ease-out;
+    }
+
+    .toast.error {
+      background: #f87171;
+      color: #fff;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    /* ─── Notification Banner ─── */
+    .notification-banner {
+      max-width: 900px;
+      margin: 0 auto 24px;
+      background: #1a1a2a;
+      border: 1px solid #2a2a4a;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.9rem;
+    }
+
+    .notification-banner.show {
+      display: flex;
+    }
+
+    .notification-banner .notif-text {
+      flex: 1;
+      color: #aaa;
+    }
+
+    .notification-banner button {
+      padding: 10px 20px;
+      min-height: 48px;
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .notification-banner button:hover {
+      background: #4f46e5;
+    }
+
+    @media (max-width: 500px) {
+      body { padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+      .action-bar { gap: 8px; }
+      .action-btn { min-width: 0; padding: 12px 12px; font-size: 0.9rem; }
+      .action-btn.update { flex: 1; }
+      .time-preset-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Fasting Tracker</h1>
+    <p>16-hour intermittent fasting</p>
+  </div>
+
+  <div class="status-card" id="status-card">
+    <div class="indicator">—</div>
+    <div class="text">Loading status...</div>
+  </div>
+
+  <!-- Action Bar -->
+  <div class="action-bar" id="action-bar">
+    <button class="action-btn start" id="btn-start-fast" onclick="openTimePicker('start')">Start Fast</button>
+    <button class="action-btn stop" id="btn-stop-fast" onclick="openTimePicker('stop')">Stop Fast</button>
+    <button class="action-btn update" id="btn-update-fast" onclick="openTimePicker('update')">Update</button>
+  </div>
+
+  <!-- Notification Banner -->
+  <div class="notification-banner" id="notification-banner">
+    <div class="notif-text" id="notif-text">Enable push notifications for fasting reminders at 7 PM and 12 PM.</div>
+    <button id="notif-enable-btn" onclick="enableNotifications()">Enable</button>
+  </div>
+
+  <div class="stats" id="stats">
+    <div class="stat-card">
+      <div class="label">Current Streak</div>
+      <div class="value green" id="stat-streak">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Avg Hours (window)</div>
+      <div class="value blue" id="stat-avg">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Best Fast</div>
+      <div class="value yellow" id="stat-best">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Goal Rate (window)</div>
+      <div class="value green" id="stat-rate">—</div>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-nav">
+      <div class="nav-buttons">
+        <button id="btn-older" title="Older">&larr; Older</button>
+      </div>
+      <div class="date-range" id="date-range"></div>
+      <div class="nav-buttons">
+        <button id="btn-newer" title="Newer">Newer &rarr;</button>
+      </div>
+    </div>
+
+    <canvas id="chart"></canvas>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div> 16h+ (Goal met)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#facc15"></div> 14–16h (Close)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f87171"></div> &lt;14h (Below)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2a2a2a"></div> No data (click to add)</div>
+    </div>
+  </div>
+
+  <div class="no-data" id="no-data" style="display:none">
+    <h2>No fasting data yet</h2>
+    <p>Click "Start Fast" to begin tracking!</p>
+  </div>
+
+  <!-- Time Picker Popup -->
+  <div class="time-picker-overlay" id="time-picker-overlay">
+    <div class="time-picker">
+      <h3 id="time-picker-title">Select Time</h3>
+      <div id="time-picker-update-info" class="update-info" style="display:none"></div>
+      <div class="time-preset-grid" id="time-preset-grid"></div>
+      <div class="time-custom-row">
+        <input type="text" id="custom-time-input" placeholder="e.g. 8:45pm" />
+        <button onclick="submitCustomTime()">Go</button>
+      </div>
+      <button class="time-picker-cancel" onclick="closeTimePicker()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal-overlay" id="edit-modal-overlay">
+    <div class="modal" id="edit-modal">
+      <h2 id="modal-title">Edit Fast</h2>
+      <div class="modal-field">
+        <label for="modal-start">Fast Start</label>
+        <input type="datetime-local" id="modal-start" />
+      </div>
+      <div class="modal-field">
+        <label for="modal-end">Fast End</label>
+        <input type="datetime-local" id="modal-end" />
+      </div>
+      <div class="modal-duration">
+        Duration: <span class="value" id="modal-duration-value">—</span>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-button delete" id="modal-delete" style="display: none;">Delete</button>
+        <button class="modal-button cancel" id="modal-cancel">Cancel</button>
+        <button class="modal-button save" id="modal-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Embedded data (works when opened directly via file://) -->
+  <script src="data.js"></script>
+
+  <script>
+    const WINDOW_SIZE = 14;
+    const GOAL_HOURS = 16;
+    const MAX_HISTORY_DAYS = 365;
+    const FASTING_START_TARGET = 19; // 7 PM
+    const API_BASE = (window.location.protocol === 'file:') ? 'http://localhost:3456' : '';
+
+    let allEntries = [];
+    let pageOffset = 0;
+    let chart = null;
+    let currentEditDate = null;
+    let apiAvailable = false;
+    let currentPickerAction = null; // 'start', 'stop', or 'update'
+    let appConfig = null; // loaded from /api/config
+    let currentStatus = null; // loaded from /api/status
+
+    // ─── Color helpers ───
+    function getBarColor(hours) {
+      if (hours === null || hours === undefined) return '#333333';
+      if (hours >= GOAL_HOURS) return '#4ade80';
+      if (hours >= 14) return '#facc15';
+      return '#f87171';
+    }
+
+    function getBarBorder(hours) {
+      if (hours === null || hours === undefined) return '#222222';
+      if (hours >= GOAL_HOURS) return '#22c55e';
+      if (hours >= 14) return '#eab308';
+      return '#ef4444';
+    }
+
+    // ─── Date helpers ───
+    function formatDateLabel(dateStr) {
+      const d = new Date(dateStr + 'T12:00:00');
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`;
+    }
+
+    function addDays(dateStr, n) {
+      const d = new Date(dateStr + 'T12:00:00');
+      d.setDate(d.getDate() + n);
+      return d.toISOString().slice(0, 10);
+    }
+
+    function todayStr() {
+      const now = new Date();
+      const mt = new Date(now.getTime() - 7 * 60 * 60 * 1000);
+      return mt.toISOString().slice(0, 10);
+    }
+
+    // ─── Parse custom time input ───
+    function parseCustomTime(input) {
+      const cleaned = input.trim().toLowerCase().replace(/\s+/g, '');
+      const patterns = [
+        /^(\d{1,2}):(\d{2})\s*(am|pm)$/,
+        /^(\d{1,2})\s*(am|pm)$/,
+        /^(\d{1,2}):(\d{2})$/,
+      ];
+      for (const pattern of patterns) {
+        const match = cleaned.match(pattern);
+        if (!match) continue;
+        let hour = parseInt(match[1], 10);
+        const minute = match[2] && !match[2].match(/am|pm/) ? parseInt(match[2], 10) : 0;
+        const ampm = match[match.length - 1];
+        if (ampm === 'pm' && hour !== 12) hour += 12;
+        if (ampm === 'am' && hour === 12) hour = 0;
+        if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) return { hour, minute };
+      }
+      return null;
+    }
+
+    // ─── Time Picker ───
+    function openTimePicker(action) {
+      currentPickerAction = action;
+      const grid = document.getElementById('time-preset-grid');
+      const title = document.getElementById('time-picker-title');
+      const updateInfo = document.getElementById('time-picker-update-info');
+      grid.innerHTML = '';
+      updateInfo.style.display = 'none';
+
+      let options = [];
+      if (action === 'start') {
+        title.textContent = 'When did you start fasting?';
+        options = (appConfig && appConfig.eveningTimeOptions) || [
+          { text: '7:00 PM', hour: 19, minute: 0 },
+          { text: '7:30 PM', hour: 19, minute: 30 },
+          { text: '8:00 PM', hour: 20, minute: 0 },
+          { text: '8:30 PM', hour: 20, minute: 30 },
+          { text: '9:00 PM', hour: 21, minute: 0 },
+        ];
+      } else if (action === 'stop') {
+        title.textContent = 'When did you break your fast?';
+        options = (appConfig && appConfig.middayTimeOptions) || [
+          { text: '11:00 AM', hour: 11, minute: 0 },
+          { text: '11:30 AM', hour: 11, minute: 30 },
+          { text: '12:00 PM', hour: 12, minute: 0 },
+          { text: '12:30 PM', hour: 12, minute: 30 },
+          { text: '1:00 PM', hour: 13, minute: 0 },
+        ];
+      } else if (action === 'update') {
+        title.textContent = 'Update most recent time';
+        // Show info about what's being updated
+        if (currentStatus) {
+          const allSorted = [...allEntries].sort((a, b) => b.date.localeCompare(a.date));
+          const recent = allSorted[0];
+          if (recent) {
+            let fieldLabel = '';
+            if (recent.fastEnd && recent.fastStart) {
+              const startT = new Date(recent.fastStart).getTime();
+              const endT = new Date(recent.fastEnd).getTime();
+              if (endT >= startT) {
+                fieldLabel = `Update fast end: ${new Date(recent.fastEnd).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+              } else {
+                fieldLabel = `Update fast start: ${new Date(recent.fastStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+              }
+            } else if (recent.fastEnd) {
+              fieldLabel = `Update fast end: ${new Date(recent.fastEnd).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+            } else if (recent.fastStart) {
+              fieldLabel = `Update fast start: ${new Date(recent.fastStart).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+            }
+            if (fieldLabel) {
+              updateInfo.textContent = fieldLabel;
+              updateInfo.style.display = 'block';
+            }
+          }
+        }
+        // For update, show both evening and midday options since we don't know which field
+        const eveningOpts = (appConfig && appConfig.eveningTimeOptions) || [
+          { text: '7:00 PM', hour: 19, minute: 0 },
+          { text: '8:00 PM', hour: 20, minute: 0 },
+          { text: '9:00 PM', hour: 21, minute: 0 },
+        ];
+        const middayOpts = (appConfig && appConfig.middayTimeOptions) || [
+          { text: '11:00 AM', hour: 11, minute: 0 },
+          { text: '12:00 PM', hour: 12, minute: 0 },
+          { text: '1:00 PM', hour: 13, minute: 0 },
+        ];
+        options = [...eveningOpts, ...middayOpts];
+      }
+
+      // Add preset buttons
+      for (const opt of options) {
+        const btn = document.createElement('button');
+        btn.className = 'time-preset-btn';
+        btn.textContent = opt.text;
+        btn.onclick = () => submitTimeAction(opt.hour, opt.minute);
+        grid.appendChild(btn);
+      }
+
+      // Add "Now" button
+      if (action !== 'update') {
+        const nowBtn = document.createElement('button');
+        nowBtn.className = 'time-preset-btn now-btn';
+        nowBtn.textContent = 'Now';
+        nowBtn.onclick = () => submitTimeAction(null, null);
+        grid.appendChild(nowBtn);
+      }
+
+      document.getElementById('custom-time-input').value = '';
+      document.getElementById('time-picker-overlay').classList.add('show');
+    }
+
+    function closeTimePicker() {
+      document.getElementById('time-picker-overlay').classList.remove('show');
+      currentPickerAction = null;
+    }
+
+    function submitCustomTime() {
+      const input = document.getElementById('custom-time-input').value;
+      const parsed = parseCustomTime(input);
+      if (!parsed) {
+        showToast('Could not parse time. Try "8:45pm" or "12:15"', true);
+        return;
+      }
+      submitTimeAction(parsed.hour, parsed.minute);
+    }
+
+    async function submitTimeAction(hour, minute) {
+      if (!apiAvailable) {
+        showToast('API not available — start the app with npm start', true);
+        closeTimePicker();
+        return;
+      }
+
+      const action = currentPickerAction;
+      closeTimePicker();
+
+      let endpoint;
+      if (action === 'start') endpoint = '/api/fast/start';
+      else if (action === 'stop') endpoint = '/api/fast/stop';
+      else if (action === 'update') endpoint = '/api/fast/update';
+
+      const body = (hour != null && minute != null) ? { hour, minute } : {};
+
+      try {
+        const resp = await fetch(`${API_BASE}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || 'Request failed');
+        }
+
+        const result = await resp.json();
+
+        // Build toast message
+        let msg;
+        if (action === 'start') {
+          msg = `Fast started at ${result.displayTime}`;
+        } else if (action === 'stop') {
+          if (result.hours) {
+            const goalText = result.goalMet ? 'Goal met!' : `${result.hours}h`;
+            msg = `Fast ended at ${result.displayTime} — ${goalText}`;
+          } else {
+            msg = `Fast ended at ${result.displayTime}`;
+          }
+        } else if (action === 'update') {
+          const fieldName = result.field === 'fastStart' ? 'start' : 'end';
+          msg = `Updated fast ${fieldName} to ${result.displayTime}`;
+        }
+
+        showToast(msg);
+
+        // Refresh everything
+        await loadData();
+        await loadStatus();
+        renderChart();
+        updateActionHighlight();
+      } catch (err) {
+        console.error('Action failed:', err);
+        showToast(err.message || 'Action failed', true);
+      }
+    }
+
+    // ─── Action button highlighting ───
+    function updateActionHighlight() {
+      const startBtn = document.getElementById('btn-start-fast');
+      const stopBtn = document.getElementById('btn-stop-fast');
+      startBtn.classList.remove('suggested');
+      stopBtn.classList.remove('suggested');
+
+      if (currentStatus) {
+        if (currentStatus.isFasting) {
+          stopBtn.classList.add('suggested');
+        } else {
+          startBtn.classList.add('suggested');
+        }
+      }
+    }
+
+    // ─── Status Card ───
+    function updateStatusCard() {
+      const statusCard = document.getElementById('status-card');
+      if (!statusCard) return;
+
+      const activeEntry = [...allEntries]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .find(e => e.fastStart && !e.fastEnd);
+
+      if (activeEntry) {
+        const startTime = new Date(activeEntry.fastStart);
+        const now = new Date();
+        const elapsedMs = now - startTime;
+        const elapsedHours = elapsedMs / (1000 * 60 * 60);
+        const goalTime = new Date(startTime.getTime() + 16 * 60 * 60 * 1000);
+        const remainingMs = goalTime - now;
+        const remainingHours = Math.max(0, remainingMs / (1000 * 60 * 60));
+        const goalTimeStr = goalTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+        statusCard.className = 'status-card';
+        statusCard.innerHTML = `
+          <div class="indicator active">●</div>
+          <div class="text">
+            <strong>Fasting for <span class="status-time">${elapsedHours.toFixed(1)}h</span></strong>
+            — <span class="status-time">${remainingHours.toFixed(1)}h</span> until 16h goal (${goalTimeStr})
+          </div>
+        `;
+      } else {
+        const now = new Date();
+        let nextFastTime = new Date(now);
+        nextFastTime.setHours(FASTING_START_TARGET, 0, 0, 0);
+        if (now.getHours() >= FASTING_START_TARGET) {
+          nextFastTime.setDate(nextFastTime.getDate() + 1);
+        }
+        const hoursUntil = (nextFastTime - now) / (1000 * 60 * 60);
+        const targetTimeStr = nextFastTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+        statusCard.className = 'status-card not-fasting';
+        statusCard.innerHTML = `
+          <div class="indicator">◯</div>
+          <div class="text">
+            Next fast starts at <span class="status-time">${targetTimeStr}</span> — that's in <span class="status-time">${hoursUntil.toFixed(1)}h</span>
+          </div>
+        `;
+      }
+    }
+
+    // ─── Data loading ───
+    async function loadData() {
+      try {
+        const resp = await fetch(`${API_BASE}/api/entries`);
+        if (resp.ok) {
+          allEntries = await resp.json();
+          apiAvailable = true;
+          return;
+        }
+      } catch (e) {
+        apiAvailable = false;
+      }
+
+      try {
+        const resp = await fetch('fasting-log.json');
+        if (resp.ok) {
+          const data = await resp.json();
+          allEntries = data.entries || [];
+          return;
+        }
+      } catch (e) {}
+
+      if (window.FASTING_DATA && window.FASTING_DATA.entries) {
+        allEntries = window.FASTING_DATA.entries;
+        return;
+      }
+
+      allEntries = [];
+    }
+
+    async function loadStatus() {
+      try {
+        const resp = await fetch(`${API_BASE}/api/status`);
+        if (resp.ok) currentStatus = await resp.json();
+      } catch (e) {}
+    }
+
+    async function loadConfig() {
+      try {
+        const resp = await fetch(`${API_BASE}/api/config`);
+        if (resp.ok) appConfig = await resp.json();
+      } catch (e) {}
+    }
+
+    // ─── Stats calculation ───
+    function updateStats(windowEntries) {
+      const sorted = [...allEntries].sort((a, b) => b.date.localeCompare(a.date));
+      let streak = 0;
+      for (const e of sorted) {
+        if (e.goalMet) streak++;
+        else break;
+      }
+      document.getElementById('stat-streak').textContent = `${streak} day${streak !== 1 ? 's' : ''}`;
+
+      const withData = windowEntries.filter(e => e && e.hoursOfFasting != null);
+      if (withData.length > 0) {
+        const avg = withData.reduce((s, e) => s + e.hoursOfFasting, 0) / withData.length;
+        document.getElementById('stat-avg').textContent = `${avg.toFixed(1)}h`;
+      } else {
+        document.getElementById('stat-avg').textContent = '—';
+      }
+
+      if (allEntries.length > 0) {
+        const best = allEntries.reduce((max, e) =>
+          (e.hoursOfFasting || 0) > (max.hoursOfFasting || 0) ? e : max
+        );
+        document.getElementById('stat-best').textContent = best.hoursOfFasting
+          ? `${best.hoursOfFasting}h`
+          : '—';
+      }
+
+      if (withData.length > 0) {
+        const met = withData.filter(e => e.goalMet).length;
+        const pct = Math.round((met / withData.length) * 100);
+        document.getElementById('stat-rate').textContent = `${pct}%`;
+      } else {
+        document.getElementById('stat-rate').textContent = '—';
+      }
+    }
+
+    // ─── Chart rendering ───
+    function getWindowDates() {
+      const today = todayStr();
+      const endDate = addDays(today, -(pageOffset * WINDOW_SIZE));
+      const dates = [];
+      for (let i = WINDOW_SIZE - 1; i >= 0; i--) {
+        dates.push(addDays(endDate, -i));
+      }
+      return dates;
+    }
+
+    function renderChart() {
+      const dates = getWindowDates();
+      const entryMap = {};
+      allEntries.forEach(e => { entryMap[e.date] = e; });
+
+      const PLACEHOLDER_HOURS = 10;
+      const windowEntries = dates.map(d => entryMap[d] || null);
+      const labels = dates.map(formatDateLabel);
+      const values = windowEntries.map(e => e ? (e.hoursOfFasting || 0) : PLACEHOLDER_HOURS);
+      const colors = windowEntries.map(e => e ? getBarColor(e.hoursOfFasting) : '#2a2a2a');
+      const borders = windowEntries.map(e => e ? getBarBorder(e.hoursOfFasting) : '#333333');
+
+      document.getElementById('date-range').textContent =
+        `${formatDateLabel(dates[0])} — ${formatDateLabel(dates[dates.length - 1])}`;
+
+      const maxPages = Math.floor(MAX_HISTORY_DAYS / WINDOW_SIZE);
+      document.getElementById('btn-older').disabled = pageOffset >= maxPages;
+      document.getElementById('btn-newer').disabled = pageOffset <= 0;
+
+      updateStats(windowEntries);
+      updateStatusCard();
+
+      const ctx = document.getElementById('chart').getContext('2d');
+      if (chart) chart.destroy();
+
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Hours Fasted',
+            data: values,
+            backgroundColor: colors,
+            borderColor: borders,
+            borderWidth: 1,
+            borderRadius: 4,
+            barPercentage: 0.7,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          onClick: (event, elements) => {
+            const dates = getWindowDates();
+            if (elements.length > 0) {
+              openEditModal(dates[elements[0].index]);
+            } else {
+              const xScale = chart.scales.x;
+              const rect = chart.canvas.getBoundingClientRect();
+              const x = event.native.clientX - rect.left;
+              for (let i = 0; i < dates.length; i++) {
+                const barX = xScale.getPixelForValue(i);
+                if (Math.abs(x - barX) < (xScale.width / dates.length / 2)) {
+                  openEditModal(dates[i]);
+                  return;
+                }
+              }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (items) => items[0].label,
+                label: (item) => {
+                  const idx = item.dataIndex;
+                  const dates = getWindowDates();
+                  const entry = allEntries.find(e => e.date === dates[idx]);
+                  if (!entry) return 'No data — click to add';
+                  const val = entry.hoursOfFasting || 0;
+                  if (val === 0) return 'No data — click to edit';
+                  const status = val >= GOAL_HOURS ? 'Goal met' : val >= 14 ? '~ Close' : 'Below goal';
+                  return `${val}h — ${status}`;
+                },
+              },
+              backgroundColor: '#1a1a1a',
+              borderColor: '#3a3a3a',
+              borderWidth: 1,
+              titleColor: '#fff',
+              bodyColor: '#ccc',
+              padding: 10,
+              cornerRadius: 8,
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 24,
+              grid: { color: '#222' },
+              ticks: {
+                color: '#666',
+                callback: (v) => `${v}h`,
+                stepSize: 4,
+              },
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                color: '#888',
+                maxRotation: 45,
+                minRotation: 0,
+                font: { size: 11 },
+              },
+            },
+          },
+        },
+        plugins: [{
+          id: 'goalLine',
+          afterDraw(chart) {
+            const yScale = chart.scales.y;
+            const goalY = yScale.getPixelForValue(GOAL_HOURS);
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.setLineDash([6, 4]);
+            ctx.strokeStyle = '#4ade8066';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(chart.chartArea.left, goalY);
+            ctx.lineTo(chart.chartArea.right, goalY);
+            ctx.stroke();
+            ctx.fillStyle = '#4ade8088';
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText('16h goal', chart.chartArea.right - 4, goalY - 6);
+            ctx.restore();
+          },
+        }],
+      });
+    }
+
+    // ─── Modal helpers ───
+    function isoToLocalDatetimeString(isoString) {
+      if (!isoString) return '';
+      const d = new Date(isoString);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const date = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${date}T${hours}:${minutes}`;
+    }
+
+    function localDatetimeStringToIso(localStr) {
+      if (!localStr) return null;
+      return new Date(localStr).toISOString();
+    }
+
+    function calculateDurationHours(startIso, endIso) {
+      if (!startIso || !endIso) return null;
+      return Math.round(((new Date(endIso) - new Date(startIso)) / (1000 * 60 * 60)) * 10) / 10;
+    }
+
+    function showToast(message, isError = false) {
+      const toast = document.createElement('div');
+      toast.className = `toast ${isError ? 'error' : ''}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function openEditModal(dateStr) {
+      currentEditDate = dateStr;
+      const entry = allEntries.find(e => e.date === dateStr);
+      const d = new Date(dateStr + 'T12:00:00');
+      const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+      const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+
+      document.getElementById('modal-title').textContent = `Edit Fast — ${dayName} ${monthName} ${d.getDate()}`;
+
+      if (entry && entry.fastStart) {
+        document.getElementById('modal-start').value = isoToLocalDatetimeString(entry.fastStart);
+      } else {
+        const prevDay = addDays(dateStr, -1);
+        document.getElementById('modal-start').value = isoToLocalDatetimeString(new Date(prevDay + 'T20:00:00').toISOString());
+      }
+
+      if (entry && entry.fastEnd) {
+        document.getElementById('modal-end').value = isoToLocalDatetimeString(entry.fastEnd);
+      } else {
+        document.getElementById('modal-end').value = isoToLocalDatetimeString(new Date(dateStr + 'T12:00:00').toISOString());
+      }
+
+      updateModalDuration();
+      document.getElementById('modal-delete').style.display = entry ? 'block' : 'none';
+      document.getElementById('edit-modal-overlay').classList.add('show');
+    }
+
+    function closeEditModal() {
+      document.getElementById('edit-modal-overlay').classList.remove('show');
+      currentEditDate = null;
+    }
+
+    function updateModalDuration() {
+      const startStr = document.getElementById('modal-start').value;
+      const endStr = document.getElementById('modal-end').value;
+      if (startStr && endStr) {
+        const hours = calculateDurationHours(localDatetimeStringToIso(startStr), localDatetimeStringToIso(endStr));
+        document.getElementById('modal-duration-value').textContent = hours !== null ? `${hours}h` : '—';
+      } else {
+        document.getElementById('modal-duration-value').textContent = '—';
+      }
+    }
+
+    async function saveModalEntry() {
+      const startStr = document.getElementById('modal-start').value;
+      const endStr = document.getElementById('modal-end').value;
+      if (!startStr || !endStr) {
+        showToast('Please fill in both start and end times', true);
+        return;
+      }
+      if (!apiAvailable) {
+        showToast('API not running — start the app with npm start', true);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/entry`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: currentEditDate,
+            fastStart: localDatetimeStringToIso(startStr),
+            fastEnd: localDatetimeStringToIso(endStr),
+          }),
+        });
+        if (!response.ok) throw new Error('Save failed');
+
+        showToast('Fast saved successfully');
+        closeEditModal();
+        await loadData();
+        renderChart();
+      } catch (err) {
+        showToast('Failed to save — is the app running?', true);
+      }
+    }
+
+    async function deleteModalEntry() {
+      if (!confirm('Are you sure you want to delete this fast?')) return;
+      if (!apiAvailable) {
+        showToast('API not running — start the app with npm start', true);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/entry`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: currentEditDate }),
+        });
+        if (!response.ok) throw new Error('Delete failed');
+
+        showToast('Fast deleted successfully');
+        closeEditModal();
+        await loadData();
+        renderChart();
+      } catch (err) {
+        showToast('Failed to delete — is the app running?', true);
+      }
+    }
+
+    // ─── Navigation ───
+    document.getElementById('btn-older').addEventListener('click', () => {
+      pageOffset++;
+      renderChart();
+    });
+
+    document.getElementById('btn-newer').addEventListener('click', () => {
+      if (pageOffset > 0) pageOffset--;
+      renderChart();
+    });
+
+    // ─── Modal Event Listeners ───
+    document.getElementById('modal-start').addEventListener('change', updateModalDuration);
+    document.getElementById('modal-end').addEventListener('change', updateModalDuration);
+    document.getElementById('modal-save').addEventListener('click', saveModalEntry);
+    document.getElementById('modal-delete').addEventListener('click', deleteModalEntry);
+    document.getElementById('modal-cancel').addEventListener('click', closeEditModal);
+
+    document.getElementById('edit-modal-overlay').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('edit-modal-overlay')) closeEditModal();
+    });
+
+    document.getElementById('time-picker-overlay').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('time-picker-overlay')) closeTimePicker();
+    });
+
+    document.getElementById('custom-time-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submitCustomTime();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (document.getElementById('time-picker-overlay').classList.contains('show')) closeTimePicker();
+        else if (document.getElementById('edit-modal-overlay').classList.contains('show')) closeEditModal();
+      }
+    });
+
+    // ─── Push Notification Setup ───
+    async function initNotifications() {
+      const banner = document.getElementById('notification-banner');
+      const notifText = document.getElementById('notif-text');
+      const enableBtn = document.getElementById('notif-enable-btn');
+
+      // Check if push is supported
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+      // Check if running as standalone PWA (needed for iOS)
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+      if (isIOS && !isStandalone) {
+        notifText.textContent = 'Add to Home Screen first to enable push notifications.';
+        enableBtn.textContent = 'How?';
+        enableBtn.onclick = () => {
+          showToast('Tap the share button, then "Add to Home Screen"');
+        };
+        banner.classList.add('show');
+        return;
+      }
+
+      // Check current permission
+      if (Notification.permission === 'granted') {
+        // Already subscribed — check if we need to re-subscribe
+        await ensurePushSubscription();
+        return;
+      }
+
+      if (Notification.permission === 'denied') return;
+
+      // Show banner for 'default' state
+      banner.classList.add('show');
+    }
+
+    async function enableNotifications() {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          showToast('Notification permission denied', true);
+          return;
+        }
+
+        await ensurePushSubscription();
+        document.getElementById('notification-banner').classList.remove('show');
+        showToast('Notifications enabled!');
+      } catch (err) {
+        console.error('Failed to enable notifications:', err);
+        showToast('Failed to enable notifications', true);
+      }
+    }
+
+    async function ensurePushSubscription() {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+
+        // Check for existing subscription
+        let sub = await reg.pushManager.getSubscription();
+        if (sub) return;
+
+        // Get VAPID public key
+        const resp = await fetch(`${API_BASE}/api/vapid-public-key`);
+        if (!resp.ok) return;
+        const { publicKey } = await resp.json();
+        if (!publicKey) return;
+
+        // Convert VAPID key
+        const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
+        // Subscribe
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
+
+        // Send subscription to server
+        await fetch(`${API_BASE}/api/push/subscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sub.toJSON()),
+        });
+      } catch (err) {
+        console.error('Push subscription failed:', err);
+      }
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = atob(base64);
+      return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+    }
+
+    // ─── Service Worker Registration ───
+    async function registerServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        try {
+          await navigator.serviceWorker.register('sw.js');
+        } catch (err) {
+          console.log('Service worker registration failed:', err);
+        }
+      }
+    }
+
+    // ─── Init ───
+    (async () => {
+      await registerServiceWorker();
+      await Promise.all([loadData(), loadConfig(), loadStatus()]);
+
+      if (allEntries.length === 0) {
+        document.getElementById('no-data').style.display = 'block';
+        document.querySelector('.chart-container').style.display = 'none';
+        document.getElementById('stats').style.display = 'none';
+      } else {
+        renderChart();
+      }
+
+      updateActionHighlight();
+      initNotifications();
+
+      // Update status card every 60 seconds
+      setInterval(updateStatusCard, 60000);
+    })();
+  </script>
+</body>
+</html>

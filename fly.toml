@@ -1,0 +1,14 @@
+app = "fasting-tracker"
+primary_region = "dfw"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 3456
+  force_https = true
+  auto_stop_machines = false
+
+[mounts]
+  source = "fasting_data"
+  destination = "/app/data"
